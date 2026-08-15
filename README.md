@@ -2,15 +2,16 @@
 
 **Find the Kubernetes workloads that are asleep and stop paying for them.**
 
-Most Kubernetes workloads spend more time idle than working. A batch job that
+Many Kubernetes workloads spend more time idle than working. A batch job that
 runs 15 minutes every 4 hours still holds its pod (and its bill) for the other
 3h 45m. A dependency service peaks at 3 PM and sits at 5% CPU for the rest of
-the day. A tool that _looks_ at your metrics and _tells_ you which workloads
-are like this — and when's the safe time to schedule them, migrate them, or take
-them down — pays for itself immediately.
+the day. Kube Siesta is a tool that _looks_ at your metrics and _tells_ you 
+which workloads are like this — and when's the safe time to schedule them, 
+migrate them, or take them down — pays for itself immediately. Derived from
+the word "Siesta" - a short sleep or rest.
 
-Kube Siesta reads your existing Prometheus data and gives you two kinds of
-advice:
+Kube Siesta reads your existing data (currently Prometheus) and gives you two 
+kinds of advice:
 
 1. **Job candidates** — _"This deployment is idle 87% of the day and spikes for
    2h every 8h. Turn it into a CronJob. You'll save ~$32/mo."_
