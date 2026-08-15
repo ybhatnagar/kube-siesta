@@ -1,0 +1,19 @@
+apiVersion: v2
+name: kubesiesta
+description: >-
+  Kube Siesta — a scheduled collector (CronJob), the engine + REST API, and an
+  optional web UI. Analyzes cluster resource usage and recommends Job/CronJob/KEDA/Knative
+  migrations. Never mutates the target cluster.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kubernetes
+  - cost-optimization
+  - jobs
+  - cronjob
+  - serverless
+sources:
+  - https://example.com/kube-siesta
+maintainers:
+  - name: Yash Bhatnagar
