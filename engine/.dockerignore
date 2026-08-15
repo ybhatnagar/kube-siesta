@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+fixtures/
+*.db
+*.sqlite
+README.md
+Dockerfile
+.dockerignore
+.git
