@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Kube Siesta</title>
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">k8s</div>
+  <h1>Kube Siesta</h1>
+  <div class="env"><span class="dot" id="apidot"></span> <span id="apienv">connecting…</span></div>
+</div>
+
+<div class="apibar">
+  <span>API</span>
+  <input id="apibase" type="text" spellcheck="false"/>
+  <button class="btn sm" onclick="App.setApiBase()">Use</button>
+  <span id="apistatus"></span>
+</div>
+
+<div class="modebar">
+  <span class="small muted">Mode</span>
+  <div class="seg" id="modeseg">
+    <button class="seg-btn active" data-m="job" onclick="App.setMode('job')">Job candidates</button>
+    <button class="seg-btn" data-m="maint" onclick="App.setMode('maint')">Maintenance windows</button>
+  </div>
+  <span class="small muted" id="modehint" style="margin-left:auto">Find idle workloads to move to Jobs / scale-to-zero</span>
+</div>
+
+<nav class="steps" id="steps">
+  <div class="step active" data-s="1"><span class="n">1</span> Connect cluster</div>
+  <span class="sep">›</span>
+  <div class="step" data-s="2"><span class="n">2</span> Select workloads</div>
+  <span class="sep">›</span>
+  <div class="step" data-s="3"><span class="n">3</span> Data sources &amp; run</div>
+  <span class="sep">›</span>
+  <div class="step" data-s="4"><span class="n">4</span> Recommendations</div>
+</nav>
+
+<main>
+  <!-- ===== SCREEN 1: CONNECT ===== -->
+  <section class="screen show" id="s1">
+    <div class="between">
+      <div><h2>Connect a Kubernetes cluster</h2>
+      <p class="sub">The tool runs outside your cluster, so it needs an endpoint and read-only credentials.</p></div>
+      <button class="btn primary" onclick="App.openM('m-cluster')">+ Add cluster</button>
+    </div>
+    <div class="grid" id="clusters" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))"></div>
+    <div class="hint" style="margin-top:18px"><span>ⓘ</span><span>Least-privilege: the tool only needs <b>read</b> (list/get) on namespaces, deployments, pods, and nodes. No write access is required.</span></div>
+  </section>
+
+  <!-- ===== SCREEN 2: WORKLOADS ===== -->
+  <section class="screen" id="s2">
+    <h2>Select workloads to analyze</h2>
+    <p class="sub">Pick a connected cluster, then choose everything or drill into namespaces and select deployments.</p>
+    <div style="position:relative;display:inline-block;margin-bottom:18px">
+      <button class="btn" onclick="App.toggleClDD(event)">Cluster: <b id="clname" style="margin:0 4px">—</b> ▾</button>
+      <div id="cldd" class="dd" style="display:none"></div>
+    </div>
+    <div class="row" style="margin-bottom:14px">
+      <label class="chk"><input type="checkbox" id="allns" onchange="App.toggleAll(this)"> <b>All namespaces</b></label>
+      <span class="pill blue" id="selcount" style="margin-left:auto">None selected</span>
+    </div>
+    <div class="tree-ns" id="tree"></div>
+    <div class="hint" style="margin-top:14px"><span>ⓘ</span><span>Deployments are <b>lazy-loaded</b>: choosing <b>All namespaces</b> makes no per-namespace call; drilling into a namespace fetches its workloads once and caches the result.</span></div>
+    <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn primary" onclick="App.goto(3)">Next: data sources ▸</button></div>
+  </section>
+
+  <!-- ===== SCREEN 3: DATA SOURCES + RUN ===== -->
+  <section class="screen" id="s3">
+    <div class="between">
+      <div><h2>Data sources</h2>
+      <p class="sub">Where the collector pulls metrics, cost, and interaction data from. Each source is a pluggable connector.</p></div>
+      <button class="btn" onclick="App.openM('m-source')">+ Add data source</button>
+    </div>
+    <div class="grid" id="sources" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))"></div>
+    <div class="card" style="margin-top:18px">
+      <div class="between">
+        <div><b>Run data collection &amp; analysis</b>
+        <div class="small muted" style="margin-top:3px">Runs the engine over your selected workloads and stored metrics.</div></div>
+        <button class="btn primary" onclick="App.openConfig()">Configure &amp; run ▸</button>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:16px"><span>ⓘ</span><span>Scope uses your <b>Select workloads</b> choice (step 2). Nothing is written to the cluster — collection only reads.</span></div>
+  </section>
+
+  <!-- ===== SCREEN 4: RECOMMENDATIONS ===== -->
+  <section class="screen" id="s4">
+    <div class="between">
+      <div><h2 id="s4title">Strategic workload recommendations</h2>
+      <p class="sub" id="s4sub">Workloads that are mostly idle with predictable periodic spikes — good candidates for a Job / CronJob or scale-to-zero.</p></div>
+      <span class="pill gray" id="candcount"></span>
+    </div>
+    <div id="runbanner" class="hint" style="display:none;margin-bottom:16px"></div>
+    <div class="reco-grid" id="recos"></div>
+    <div class="hint" style="margin-top:18px"><span>ⓘ</span><span>Recommendations are advisory. The tool never changes your cluster — you act on them yourself.</span></div>
+  </section>
+</main>
+
+<!-- ===== MODAL: add cluster ===== -->
+<div class="overlay" id="m-cluster"><div class="modal">
+  <div class="row" style="margin-bottom:16px"><h3>Add Kubernetes cluster</h3><button class="x" onclick="App.closeM('m-cluster')">×</button></div>
+  <label class="f">Cluster name</label><input id="cl-name" type="text" placeholder="prod-eng-services" style="margin-bottom:14px">
+  <label class="f">Authentication method</label>
+  <div class="tabs" id="authtabs">
+    <div class="tab active" data-a="kubeconfig">Kubeconfig</div>
+    <div class="tab" data-a="token">SA token</div>
+    <div class="tab" data-a="client_cert">Client cert</div>
+    <div class="tab" data-a="basic">Basic auth</div>
+  </div>
+  <div id="auth-kubeconfig" class="authpane">
+    <div class="hint" style="margin-bottom:12px"><span>ⓘ</span><span>Most common for external tools. Reference an uploaded kubeconfig secret.</span></div>
+    <label class="f">Context</label><input id="cl-ctx" type="text" placeholder="prod-eng-services" style="margin-bottom:12px">
+    <label class="f">Credential reference (k8s Secret name)</label><input id="cl-ref-kc" type="text" placeholder="kubeconfig-prod">
+  </div>
+  <div id="auth-token" class="authpane" style="display:none">
+    <label class="f">API server URL</label><input id="cl-url-tok" type="url" placeholder="https://10.20.0.1:6443" style="margin-bottom:12px">
+    <label class="f">Credential reference (Secret holding the bearer token)</label><input id="cl-ref-tok" type="text" placeholder="sa-token-prod">
+  </div>
+  <div id="auth-client_cert" class="authpane" style="display:none">
+    <label class="f">API server URL</label><input id="cl-url-crt" type="url" placeholder="https://10.20.0.1:6443" style="margin-bottom:12px">
+    <label class="f">Credential reference (Secret holding cert + key)</label><input id="cl-ref-crt" type="text" placeholder="client-cert-prod">
+  </div>
+  <div id="auth-basic" class="authpane" style="display:none">
+    <label class="f">API server URL</label><input id="cl-url-bsc" type="url" placeholder="https://127.0.0.1:6443" style="margin-bottom:12px">
+    <label class="f">Credential reference (Secret holding user/pass)</label><input id="cl-ref-bsc" type="text" placeholder="basic-auth-prod">
+    <div class="hint" style="margin-top:12px"><span>⚠</span><span>Legacy — most clusters disable basic auth. Prefer kubeconfig or a token.</span></div>
+  </div>
+  <div class="row" style="gap:10px;margin-top:20px">
+    <button class="btn" onclick="App.testConnection()">🔌 Test connection</button>
+    <button class="btn" style="margin-left:auto" onclick="App.saveCluster()">Save cluster</button>
+    <button class="btn primary" onclick="App.saveCluster(true)">Save &amp; continue</button>
+  </div>
+</div></div>
+
+<!-- ===== MODAL: add data source ===== -->
+<div class="overlay" id="m-source"><div class="modal">
+  <div class="row" style="margin-bottom:16px"><h3>Add data source</h3><button class="x" onclick="App.closeM('m-source')">×</button></div>
+  <label class="f">Source type</label>
+  <select id="srctype" style="margin-bottom:14px">
+    <option value="prometheus">Prometheus (or Thanos / Mimir / VictoriaMetrics)</option>
+    <option value="custom_api">Custom HTTP API</option>
+    <option value="file">CSV / JSON import (demo / air-gapped)</option>
+    <option value="opencost">OpenCost (cost)</option>
+    <option value="mesh">Service mesh — Hubble / Kiali / Jaeger (interactions)</option>
+  </select>
+  <label class="f">Name</label><input id="src-name" type="text" placeholder="prometheus" style="margin-bottom:12px">
+  <label class="f">Endpoint URL</label><input id="src-endpoint" type="url" placeholder="http://prometheus.monitoring:9090">
+  <div class="hint" style="margin-top:12px"><span>ⓘ</span><span>Anything speaking the Prometheus query API works — swap the URL, keep the connector.</span></div>
+  <div class="row" style="justify-content:flex-end;gap:10px;margin-top:20px">
+    <button class="btn" onclick="App.closeM('m-source')">Cancel</button>
+    <button class="btn primary" onclick="App.saveSource()">Add source</button>
+  </div>
+</div></div>
+
+<!-- ===== MODAL: edit data source ===== -->
+<div class="overlay" id="m-editsrc"><div class="modal">
+  <div class="row" style="margin-bottom:16px"><h3 id="edit-title">Edit data source</h3><button class="x" onclick="App.closeM('m-editsrc')">×</button></div>
+  <div id="editbody"></div>
+  <div class="row" style="margin-top:20px;gap:10px">
+    <button class="btn danger" onclick="App.deleteSource()">Remove source</button>
+    <button class="btn" style="margin-left:auto" onclick="App.testSource()">Test connection</button>
+    <button class="btn primary" onclick="App.saveSourceEdit()">Save changes</button>
+  </div>
+</div></div>
+
+<!-- ===== MODAL: analysis config ===== -->
+<div class="overlay" id="m-config"><div class="modal">
+  <div class="row" style="margin-bottom:16px"><h3>Configure &amp; run analysis</h3><button class="x" onclick="App.closeM('m-config')">×</button></div>
+  <label class="f">Consider resources</label>
+  <div style="columns:2;margin-bottom:8px">
+    <label class="chk"><input type="checkbox" class="rescb" value="cpu" checked> CPU</label>
+    <label class="chk"><input type="checkbox" class="rescb" value="memory" checked> Memory</label>
+    <label class="chk"><input type="checkbox" class="rescb" value="net_tx"> Network Tx</label>
+    <label class="chk"><input type="checkbox" class="rescb" value="net_rx"> Network Rx</label>
+    <label class="chk"><input type="checkbox" class="rescb" value="ephemeral_storage"> Ephemeral storage</label>
+  </div>
+  <div class="grid2" style="margin:10px 0">
+    <div><label class="f">Data window</label>
+      <select id="cfg-window"><option value="7d">Last 7 days</option><option value="14d">Last 14 days</option><option value="30d">Last 30 days</option></select></div>
+    <div><label class="f">Min seasonality period (hours)</label><input id="cfg-minperiod" type="number" placeholder="3"></div>
+  </div>
+  <div class="hint"><span>ⓘ</span><span id="cfg-scope">Scope: all workloads.</span></div>
+  <div class="row" style="justify-content:flex-end;gap:10px;margin-top:16px">
+    <button class="btn" onclick="App.closeM('m-config')">Cancel</button>
+    <button class="btn primary" onclick="App.startRun()">Run analysis ▸</button>
+  </div>
+</div></div>
+
+<!-- ===== MODAL: run progress ===== -->
+<div class="overlay" id="m-run"><div class="modal" style="max-width:440px">
+  <h3 style="margin-bottom:4px">Running analysis</h3>
+  <p class="small muted" style="margin:0 0 18px">Collecting data, then executing the engine over your selected workloads.</p>
+  <div class="rstep" id="rs1"></div>
+  <div class="rstep" id="rs2"></div>
+  <div class="rstep" id="rs3"></div>
+</div></div>
+
+<!-- ===== MODAL: why ===== -->
+<div class="overlay" id="m-why"><div class="modal lg">
+  <div class="row" style="margin-bottom:14px"><h3>Why this recommendation</h3><button class="x" onclick="App.closeM('m-why')">×</button></div>
+  <div class="evidence" id="why-text"></div>
+  <div class="metric small" id="why-metrics"></div>
+  <div class="row between" style="margin-bottom:6px"><span class="small muted" id="why-chart-label">usage</span>
+    <label class="chk small"><input type="checkbox" id="why-chart-toggle" checked onchange="App.toggleChart()"> show chart</label></div>
+  <svg id="whychart" viewBox="0 0 660 180" width="100%" height="180" style="border:1px solid var(--border);border-radius:8px;background:#fbfcfd"></svg>
+  <div class="hint" style="margin-top:12px"><span>ⓘ</span><span>The text summary is the lightweight default; the chart is optional and can be turned off for large fleets.</span></div>
+  <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn primary" onclick="App.closeM('m-why')">Close</button></div>
+</div></div>
+
+<!-- ===== MODAL: similar ===== -->
+<div class="overlay" id="m-similar"><div class="modal">
+  <div class="row" style="margin-bottom:14px"><h3>Similar interacting workloads</h3><button class="x" onclick="App.closeM('m-similar')">×</button></div>
+  <div class="hint" style="margin-bottom:6px"><span>ⓘ</span><span>These workloads interact with <b id="sim-name">—</b> downstream and show the <b>same seasonality at the same time</b>. You can scale them down yourself as needed.</span></div>
+  <div id="sim-peers"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn primary" onclick="App.closeM('m-similar')">Close</button></div>
+</div></div>
+
+<!-- ===== MODAL: maintenance config ===== -->
+<div class="overlay" id="m-config-maint"><div class="modal">
+  <div class="row" style="margin-bottom:16px"><h3>Configure maintenance analysis</h3><button class="x" onclick="App.closeM('m-config-maint')">×</button></div>
+  <label class="f">Target workload</label>
+  <select id="maint-target" style="margin-bottom:12px"></select>
+  <div class="grid2" style="margin-bottom:12px">
+    <div><label class="f">Maintenance duration</label>
+      <input id="maint-duration" type="text" placeholder="30m"></div>
+    <div><label class="f">Perform by (deadline)</label>
+      <select id="maint-deadline">
+        <option value="1d">Within 1 day</option>
+        <option value="3d" selected>Within 3 days</option>
+        <option value="7d">Within 1 week</option>
+      </select></div>
+  </div>
+  <label class="f">Consider resources (to detect activity)</label>
+  <div style="columns:2;margin-bottom:8px">
+    <label class="chk"><input type="checkbox" class="maint-rescb" value="cpu" checked> CPU</label>
+    <label class="chk"><input type="checkbox" class="maint-rescb" value="memory" checked> Memory</label>
+    <label class="chk"><input type="checkbox" class="maint-rescb" value="net_tx"> Network Tx</label>
+    <label class="chk"><input type="checkbox" class="maint-rescb" value="net_rx"> Network Rx</label>
+  </div>
+  <div><label class="f">Resample frequency</label>
+    <input id="maint-resample" type="text" placeholder="1h (leave blank for default)"></div>
+  <div class="hint" style="margin-top:12px"><span>ⓘ</span><span>The engine projects the target and every <b>upstream caller</b>'s active/idle pattern forward, scores each instant by active-app count, and picks the earliest low-impact window that fits the duration.</span></div>
+  <div class="row" style="justify-content:flex-end;gap:10px;margin-top:16px">
+    <button class="btn" onclick="App.closeM('m-config-maint')">Cancel</button>
+    <button class="btn primary" onclick="App.startRun()">Find windows ▸</button>
+  </div>
+</div></div>
+
+<!-- ===== MODAL: maintenance why ===== -->
+<div class="overlay" id="m-maint-why"><div class="modal lg">
+  <div class="row" style="margin-bottom:14px"><h3>Why this window</h3><button class="x" onclick="App.closeM('m-maint-why')">×</button></div>
+  <div class="evidence" id="mw-summary"></div>
+  <div class="metric small" id="mw-metrics"></div>
+  <div class="small muted" style="margin-bottom:6px">Projected activity of the target + upstream deps (shaded band = chosen window)</div>
+  <svg id="maintchart" viewBox="0 0 660 180" width="100%" height="180" style="border:1px solid var(--border);border-radius:8px;background:#fbfcfd"></svg>
+  <div class="hint" style="margin-top:12px"><span>ⓘ</span><span>Aperiodic callers (no detected cycle or no data) are projected as always-active — a pessimistic default that keeps the window quiet under unpredictable dependents.</span></div>
+  <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn primary" onclick="App.closeM('m-maint-why')">Close</button></div>
+</div></div>
+
+<!-- ===== MODAL: impacted upstream apps ===== -->
+<div class="overlay" id="m-impacted"><div class="modal">
+  <div class="row" style="margin-bottom:14px"><h3>Impacted upstream apps</h3><button class="x" onclick="App.closeM('m-impacted')">×</button></div>
+  <div class="hint" style="margin-bottom:6px"><span>ⓘ</span><span>These services call <b id="imp-name">—</b> (directly or transitively), so they'll be affected when it's down. Their forecasts were factored into the score.</span></div>
+  <div id="imp-list"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn primary" onclick="App.closeM('m-impacted')">Close</button></div>
+</div></div>
+
+<div id="toast"></div>
+<footer class="note">Kube Siesta · advisory only · never mutates your cluster</footer>
+<script src="app.js"></script>
+</body>
+</html>
