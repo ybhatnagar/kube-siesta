@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a new capability, a Forecaster, a new metric source, or a UX improvement.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Kube Siesta is deliberately narrow — **read-only advisor** for
+        job-migration candidates and maintenance windows. Anything that
+        mutates the target cluster (auto-apply, GitOps push, admission
+        webhooks, operators) is intentionally out of scope. If you're
+        proposing that, please explain how it can stay read-only.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today that you wish you could?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: |
+        A sketch of the API / UX / algorithm you have in mind. No commitment —
+        we can iterate. If it touches the `/api/v1` DTOs or the DB schema,
+        call that out explicitly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional — anything you tried or ruled out.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: fit
+    attributes:
+      label: Fit
+      options:
+        - label: This proposal stays read-only (does not mutate the target cluster).
+          required: true
+        - label: I've searched existing issues and this isn't a duplicate.
+          required: true
