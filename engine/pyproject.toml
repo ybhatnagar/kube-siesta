@@ -7,11 +7,16 @@ name = "kubesiesta-engine"
 version = "0.1.0"
 description = "Kube Siesta — Module 2: core engine + API (docs/05, docs/04)"
 requires-python = ">=3.9"
+# Upper bounds intentionally loose so pip picks the newest wheel available for
+# the interpreter it's running under. This matters because scipy < 1.14 has no
+# Python-3.13 wheels (source build needs OpenBLAS), and scipy >= 1.14 drops
+# Python 3.9 — pinning `<1.14` broke CI on 3.13 while a broader range resolves
+# to 1.13.x on Py 3.9 (last that supports it) and 1.14+ on Py 3.13.
 dependencies = [
-    "numpy>=1.24,<2.1",
-    "scipy>=1.10,<1.14",
-    "statsmodels>=0.14,<0.15",
-    "pandas>=2.0,<2.3",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "statsmodels>=0.14",
+    "pandas>=2.0",
     "fastapi>=0.110",
     "uvicorn>=0.27",
     "PyYAML>=6.0",
